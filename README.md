@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/macshell-avatar-v2.png" alt="macshell" width="148">
+  <img src="assets/macshell-avatar-v3.png" alt="macshell" width="148">
 
   # macshell
 
