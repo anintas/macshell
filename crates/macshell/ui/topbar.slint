@@ -1,0 +1,679 @@
+// Верхняя полоса. Высота окна 27 pt (в логических пикселях), текст 13 px.
+import { Icons, Palette, Glyph, TrayItem, AppPlaceholder } from "common.slint";
+
+/// Закреплённое приложение: значок из оболочки Windows и подпись для подсказок.
+export struct PinItem {
+    icon: image,
+    name: string,
+}
+
+/// Кнопка правой части панели: подсветка под курсором и клик с центром по горизонтали (логические пиксели).
+component BarItem inherits Rectangle {
+    in property <color> ink;
+    callback clicked(length);
+    /// Правый клик; центр по горизонтали, как у `clicked`.
+    callback secondary(length);
+    /// Значок утащили по горизонтали: смещение мыши и ширина значка (по ним Rust считает, на сколько мест сдвинуть).
+    callback dragged(length, length);
+    property <bool> dragging;
+    property <bool> was-drag;
+
+    Rectangle {
+        x: 1px;
+        y: 3px;
+        width: parent.width - 2px;
+        height: parent.height - 6px;
+        border-radius: 7px;
+        background: root.dragging ? root.ink.with-alpha(0.38) : item-area.pressed ? root.ink.with-alpha(0.26) : item-area.has-hover ? root.ink.with-alpha(0.16) : root.ink.with-alpha(0);
+        animate background { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+    }
+
+    @children
+
+    item-area := TouchArea {
+        clicked => {
+            if (root.was-drag) {
+                root.was-drag = false;
+            } else {
+                root.clicked(self.absolute-position.x + self.width / 2);
+            }
+        }
+        moved => {
+            if (self.pressed && Math.abs(self.mouse-x - self.pressed-x) > 8px) {
+                root.dragging = true;
+            }
+        }
+        pointer-event(e) => {
+            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.up) {
+                root.secondary(self.absolute-position.x + self.width / 2);
+            }
+            if (e.button == PointerEventButton.left && e.kind == PointerEventKind.up && root.dragging) {
+                root.dragging = false;
+                root.was-drag = true;
+                root.dragged(self.mouse-x - self.pressed-x, self.width);
+            }
+        }
+    }
+}
+
+export component TopBar inherits Window {
+    background: transparent;
+    preferred-width: 1920px;
+    preferred-height: 27px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <string> clock;
+    in property <string> app-name;
+    /// Названия меню окна приложения слева направо; пусто, если читать нечего.
+    in property <[string]> app-menus;
+    in property <length> app-name-limit: 100000px;
+    callback app-name-clicked(length);
+    callback app-menu-clicked(int, length);
+    /// 0 нет сети, 1 Wi-Fi, 2 проводная.
+    in property <int> wifi: 1;
+    /// 0 выключен или ноль, 1 тихо, 2 громко.
+    in property <int> volume: 2;
+    /// -1 нет батареи, иначе проценты.
+    in property <int> battery: -1;
+    in property <bool> charging;
+    /// 0 нет радио (значка нет), 1 выключен, 2 включён.
+    in property <int> bluetooth: 0;
+    /// Код языка раскладки («RU», «EN»); пустой, пока неизвестен.
+    in property <string> input-lang;
+    callback volume-clicked(length);
+    callback bluetooth-clicked(length);
+    callback clock-clicked(length);
+    callback clock-menu(length);
+    callback lang-clicked();
+    callback spotlight-clicked();
+    callback control-clicked(length);
+    callback wifi-clicked(length);
+    callback battery-clicked(length);
+    /// Проценты рядом со значком батареи.
+    in property <bool> battery-percent;
+    /// Микрофон и камера заняты (оранжевая и зелёная точки), поднято VPN.
+    in property <bool> mic-active;
+    in property <bool> camera-active;
+    in property <bool> vpn-active;
+    /// Включено «Не беспокоить»: в панели луна.
+    in property <bool> focus-active;
+    callback focus-clicked(length);
+    /// Какие значки состояния показывать и в каком порядке слева направо: номера `bar_items::KINDS`.
+    in property <[int]> status-order: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    /// Правый клик по значку состояния (номер вида) и по пустому месту панели.
+    callback item-menu(int, length);
+    /// Значок этого вида утащили: (вид, смещение, ширина значка).
+    callback item-dragged(int, length, length);
+    callback bar-menu(length);
+    callback privacy-clicked(length);
+    callback vpn-clicked(length);
+    /// Свой логотип (картинка из файла). Пока `has-logo` ложно, рисуется стандартный.
+    in property <image> logo;
+    in property <bool> has-logo;
+    in property <[PinItem]> pins;
+    /// Значки трея, вынесенные на панель (живые: картинка обновляется, когда приложение меняет значок).
+    in property <[TrayItem]> tray-pins;
+    /// Выключен трей (`tray = "off"`): стрелки нет.
+    in property <bool> tray-enabled: true;
+    /// Цвет текста и значков слева (логотип, название) и справа (трей, звук, часы). Адаптивная панель выбирает
+    /// чёрный или белый по обоям под каждой частью; цвет меняется плавно.
+    in property <color> ink-left-to: #ffffffeb;
+    in property <color> ink-right-to: #ffffffeb;
+    // Внутри цвета плавно догоняют заданные снаружи (анимировать входное свойство Slint не позволяет).
+    property <color> ink-left: root.ink-left-to;
+    property <color> ink-right: root.ink-right-to;
+    animate ink-left { duration: Palette.animations-enabled ? 250ms : 0ms; easing: ease-in-out; }
+    animate ink-right { duration: Palette.animations-enabled ? 250ms : 0ms; easing: ease-in-out; }
+    /// Одноцветные значки трея красятся под цвет текста справа; цветные остаются как есть.
+    in property <bool> tray-mono;
+    /// Смена названия приложения: Rust ведёт эти два значения от «прозрачно, сдвинуто» к «видно, на месте».
+    in property <float> name-opacity: 1;
+    /// Половина ширины чёлки Island в центре панели; 0, когда Island нет или он под панелью.
+    in property <length> notch-half: 0px;
+    in property <length> name-offset: 0px;
+    /// Стрелка трея: центр по горизонтали в логических пикселях, под ним встаёт окно значков.
+    callback tray-clicked(length);
+    callback tray-pin-clicked(int);
+    callback tray-pin-menu(int, length);
+    /// Центр логотипа по горизонтали в логических пикселях: под ним встаёт меню.
+    callback logo-clicked(length);
+    callback pin-clicked(int);
+    /// Правый клик по значку: номер и центр по горизонтали.
+    callback pin-menu(int, length);
+
+    // Фон панели под всеми значками: правый клик по пустому месту открывает меню значков.
+    TouchArea {
+        pointer-event(e) => {
+            if (e.button == PointerEventButton.right && e.kind == PointerEventKind.up) {
+                root.bar-menu(self.mouse-x);
+            }
+        }
+    }
+
+    Rectangle {
+        x: 8px;
+        y: 0px;
+        width: 30px;
+        height: parent.height;
+
+        Rectangle {
+            x: 1px;
+            y: 3px;
+            width: parent.width - 2px;
+            height: parent.height - 6px;
+            border-radius: 7px;
+            background: logo-area.pressed ? root.ink-left.with-alpha(0.26) : logo-area.has-hover ? root.ink-left.with-alpha(0.16) : root.ink-left.with-alpha(0);
+            animate background { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+        }
+
+        // Стандартный знак: стеклянная бусина с бликом, 15 px.
+        if !root.has-logo: Rectangle {
+            width: 15px;
+            height: 15px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 7.5px;
+            background: #9db6f5;
+            border-width: 1px;
+            border-color: root.ink-left.with-alpha(0.35);
+
+            Rectangle {
+                x: 3px;
+                y: 2px;
+                width: 6px;
+                height: 4px;
+                border-radius: 2px;
+                background: #ffffffb8;
+            }
+        }
+
+        if root.has-logo: Image {
+            source: root.logo;
+            width: 16px;
+            height: 16px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            image-fit: contain;
+        }
+
+        logo-area := TouchArea {
+            clicked => {
+                root.logo-clicked(parent.x + parent.width / 2);
+            }
+        }
+    }
+
+    // Название приложения открывает его меню (скрыть, завершить).
+    Rectangle {
+        x: 40px + root.name-offset;
+        y: 3px;
+        width: name-text.width + 12px;
+        height: parent.height - 6px;
+        border-radius: 7px;
+        background: name-area.pressed ? root.ink-left.with-alpha(0.26) : name-area.has-hover ? root.ink-left.with-alpha(0.16) : root.ink-left.with-alpha(0);
+        animate background { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+    }
+
+    name-text := Text {
+        x: 46px + root.name-offset;
+        opacity: root.name-opacity;
+        y: 0px;
+        height: parent.height;
+        // Чёлка Island в центре: название обрезается, не заходя под неё. 0 значит чёлки нет.
+        width: min(min(self.preferred-width, root.app-name-limit), max(0px, (root.notch-half > 0px ? parent.width / 2 - root.notch-half - 12px : parent.width * 0.45) - 56px - (root.app-menus.length > 0 ? 52px : 0px)));
+        overflow: elide;
+        text: root.app-name;
+        color: root.ink-left;
+        font-size: 13px;
+        font-weight: 700;
+        vertical-alignment: center;
+    }
+
+    name-area := TouchArea {
+        x: 40px + root.name-offset;
+        y: 3px;
+        width: name-text.width + 12px;
+        height: parent.height - 6px;
+        clicked => {
+            root.app-name-clicked(self.absolute-position.x + self.width / 2);
+        }
+    }
+
+    // Меню окна приложения (Файл, Правка…): только у окон с классическим меню Win32.
+    HorizontalLayout {
+        x: name-text.x + name-text.width + 10px;
+        y: 0px;
+        height: parent.height;
+        spacing: 0px;
+        alignment: start;
+
+        for title[i] in root.app-menus: Rectangle {
+            width: menu-title.preferred-width + 16px;
+
+            Rectangle {
+                x: 1px;
+                y: 3px;
+                width: parent.width - 2px;
+                height: parent.height - 6px;
+                border-radius: 7px;
+                background: menu-area.pressed ? root.ink-left.with-alpha(0.26) : menu-area.has-hover ? root.ink-left.with-alpha(0.16) : root.ink-left.with-alpha(0);
+                animate background { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+            }
+
+            menu-title := Text {
+                x: 8px;
+                height: parent.height;
+                text: title;
+                color: root.ink-left;
+                font-size: 13px;
+                vertical-alignment: center;
+            }
+
+            menu-area := TouchArea {
+                clicked => {
+                    root.app-menu-clicked(i, self.absolute-position.x + self.width / 2);
+                }
+            }
+        }
+    }
+
+    HorizontalLayout {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+        alignment: end;
+        padding-right: 8px;
+        spacing: 8px;
+
+        // Стрелка: открывает окно со всеми значками трея.
+        if root.tray-enabled: Rectangle {
+            width: 22px;
+
+            Rectangle {
+                x: 1px;
+                y: 3px;
+                width: parent.width - 2px;
+                height: parent.height - 6px;
+                border-radius: 7px;
+                background: tray-area.pressed ? root.ink-right.with-alpha(0.26) : tray-area.has-hover ? root.ink-right.with-alpha(0.16) : root.ink-right.with-alpha(0);
+                animate background { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+            }
+
+            Glyph {
+                commands: Icons.caret-down;
+                size: 12px;
+                tint: root.ink-right;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            tray-area := TouchArea {
+                clicked => {
+                    root.tray-clicked(self.absolute-position.x + self.width / 2);
+                }
+            }
+        }
+
+        for item[i] in root.tray-pins: Rectangle {
+            width: 24px;
+
+            Rectangle {
+                x: 1px;
+                y: 3px;
+                width: parent.width - 2px;
+                height: parent.height - 6px;
+                border-radius: 7px;
+                background: tray-pin-area.pressed ? root.ink-right.with-alpha(0.26) : tray-pin-area.has-hover ? root.ink-right.with-alpha(0.16) : root.ink-right.with-alpha(0);
+                animate background { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+            }
+
+            Image {
+                source: item.icon;
+                colorize: root.tray-mono ? root.ink-right : transparent;
+                width: 16px;
+                height: 16px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                image-fit: contain;
+            }
+
+            tray-pin-area := TouchArea {
+                clicked => {
+                    root.tray-pin-clicked(i);
+                }
+                pointer-event(e) => {
+                    if (e.button == PointerEventButton.right && e.kind == PointerEventKind.up) {
+                        root.tray-pin-menu(i, self.absolute-position.x + self.width / 2);
+                    }
+                }
+            }
+        }
+
+        for pin[i] in root.pins: Rectangle {
+            width: 24px;
+
+            Rectangle {
+                x: 1px;
+                y: 3px;
+                width: parent.width - 2px;
+                height: parent.height - 6px;
+                border-radius: 7px;
+                background: pin-area.pressed ? root.ink-right.with-alpha(0.26) : pin-area.has-hover ? root.ink-right.with-alpha(0.16) : root.ink-right.with-alpha(0);
+                animate background { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+            }
+
+            Image {
+                source: pin.icon;
+                width: 16px;
+                height: 16px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                image-fit: contain;
+            }
+
+            // Значок не прочитался (файл переехал): заглушка вместо пустого места.
+            if pin.icon.width == 0: AppPlaceholder {
+                size: 16px;
+                tint: root.ink-right.with-alpha(0.7);
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            pin-area := TouchArea {
+                clicked => {
+                    root.pin-clicked(i);
+                }
+                pointer-event(e) => {
+                    if (e.button == PointerEventButton.right && e.kind == PointerEventKind.up) {
+                        root.pin-menu(i, self.absolute-position.x + self.width / 2);
+                    }
+                }
+            }
+        }
+
+        // Значки состояния в порядке, который задаёт Rust (`status-order`): виден только тот, что в списке.
+        for kind in root.status-order: HorizontalLayout {
+            if kind == 0: BarItem {
+            width: root.battery-percent ? 56px : 24px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(0, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(0, dx, unit);
+            }
+            clicked(x) => {
+                root.battery-clicked(x);
+            }
+
+            if root.battery-percent: Text {
+                x: 24px;
+                height: parent.height;
+                text: root.battery + "%";
+                color: root.ink-right;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+
+            Glyph {
+                size: 20px;
+                tint: root.ink-right;
+                x: root.battery-percent ? 2px : (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: root.charging ? Icons.battery-charging
+                    : root.battery >= 90 ? Icons.battery-full
+                    : root.battery >= 65 ? Icons.battery-high
+                    : root.battery >= 35 ? Icons.battery-medium
+                    : root.battery >= 12 ? Icons.battery-low
+                    : Icons.battery-empty;
+            }
+        }
+
+        // «Не беспокоить»: луна, пока режим включён; клик предлагает выключить.
+            if kind == 1: BarItem {
+            width: 24px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(1, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(1, dx, unit);
+            }
+            clicked(x) => {
+                root.focus-clicked(x);
+            }
+
+            Glyph {
+                size: 15px;
+                tint: root.ink-right;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: Icons.moon;
+            }
+        }
+
+        // Точки приватности: оранжевая для микрофона, зелёная для камеры, как в macOS.
+            if kind == 2: BarItem {
+            width: (root.mic-active && root.camera-active) ? 28px : 18px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(2, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(2, dx, unit);
+            }
+            clicked(x) => {
+                root.privacy-clicked(x);
+            }
+
+            if root.mic-active: Rectangle {
+                x: root.camera-active ? 5px : (parent.width - 8px) / 2;
+                y: (parent.height - 8px) / 2;
+                width: 8px;
+                height: 8px;
+                border-radius: 4px;
+                background: #ff9f0a;
+            }
+
+            if root.camera-active: Rectangle {
+                x: root.mic-active ? 15px : (parent.width - 8px) / 2;
+                y: (parent.height - 8px) / 2;
+                width: 8px;
+                height: 8px;
+                border-radius: 4px;
+                background: #30d158;
+            }
+        }
+
+        // VPN: подпись, пока соединение поднято; клик открывает параметры VPN.
+            if kind == 3: BarItem {
+            width: 34px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(3, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(3, dx, unit);
+            }
+            clicked(x) => {
+                root.vpn-clicked(x);
+            }
+
+            Text {
+                width: parent.width;
+                height: parent.height;
+                text: "VPN";
+                color: root.ink-right;
+                font-size: 11px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        // Bluetooth: виден, только если в компьютере есть радио; выключенный приглушён.
+            if kind == 4: BarItem {
+            width: 22px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(4, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(4, dx, unit);
+            }
+            clicked(x) => {
+                root.bluetooth-clicked(x);
+            }
+
+            Glyph {
+                size: 16px;
+                tint: root.bluetooth == 2 ? root.ink-right : root.ink-right.with-alpha(0.45);
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: Icons.bluetooth;
+            }
+        }
+
+        // Раскладка: код языка окна в фокусе, клик переключает на следующую.
+            if kind == 5: BarItem {
+            width: 28px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(5, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(5, dx, unit);
+            }
+            clicked(x) => {
+                root.lang-clicked();
+            }
+
+            Text {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+                text: root.input-lang;
+                color: root.ink-right;
+                font-size: 12px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+            if kind == 6: BarItem {
+            width: 24px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(6, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(6, dx, unit);
+            }
+            clicked(x) => {
+                root.volume-clicked(x);
+            }
+
+            Glyph {
+                size: 16px;
+                tint: root.ink-right;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: root.volume == 0 ? Icons.speaker-off : root.volume == 1 ? Icons.speaker-low : Icons.speaker;
+            }
+        }
+
+            if kind == 7: BarItem {
+            width: 24px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(7, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(7, dx, unit);
+            }
+            clicked(x) => {
+                root.wifi-clicked(x);
+            }
+
+            Glyph {
+                size: 16px;
+                tint: root.ink-right;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: root.wifi == 0 ? Icons.wifi-off : root.wifi == 1 ? Icons.wifi : Icons.globe;
+            }
+        }
+
+        // Spotlight: значок лупы, как в строке меню macOS.
+            if kind == 8: BarItem {
+            width: 24px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(8, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(8, dx, unit);
+            }
+            clicked(x) => {
+                root.spotlight-clicked();
+            }
+
+            Glyph {
+                size: 15px;
+                tint: root.ink-right;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: Icons.magnifier;
+            }
+        }
+
+        // Центр управления: плитки Wi-Fi, Bluetooth, темы и громкость.
+            if kind == 9: BarItem {
+            width: 24px;
+            ink: root.ink-right;
+            secondary(x) => {
+                root.item-menu(9, x);
+            }
+            dragged(dx, unit) => {
+                root.item-dragged(9, dx, unit);
+            }
+            clicked(x) => {
+                root.control-clicked(x);
+            }
+
+            Glyph {
+                size: 15px;
+                tint: root.ink-right;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: Icons.sliders;
+            }
+        }
+        }
+
+        // Часы открывают календарь.
+        BarItem {
+            width: clock-text.preferred-width + 12px;
+            ink: root.ink-right;
+            clicked(x) => {
+                root.clock-clicked(x);
+            }
+            secondary(x) => {
+                root.clock-menu(x);
+            }
+
+            clock-text := Text {
+                x: 6px;
+                y: 0px;
+                height: parent.height;
+                text: root.clock;
+                color: root.ink-right;
+                font-size: 13px;
+                vertical-alignment: center;
+            }
+        }
+    }
+}

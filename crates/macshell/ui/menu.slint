@@ -1,0 +1,74 @@
+// Всплывающее меню. Радиус окна 14 = радиус строки 8 + отступ 6 (концентрично).
+// Пункты приходят из Rust (`menu.rs`), высота окна считается там же: 12 + 28 на строку + 9 на разделитель.
+import { Palette } from "common.slint";
+
+export struct MenuEntry {
+    label: string,
+    enabled: bool,
+    separator: bool,
+    id: int,
+}
+
+component EntryView inherits Rectangle {
+    in property <MenuEntry> entry;
+    callback activated(int);
+    height: root.entry.separator ? 9px : 28px;
+    border-radius: 8px;
+
+    if root.entry.separator: Rectangle {
+        x: 8px;
+        y: 4px;
+        width: parent.width - 16px;
+        height: 1px;
+        background: Palette.hairline;
+    }
+
+    if !root.entry.separator: Rectangle {
+        area := TouchArea {
+            enabled: root.entry.enabled;
+            clicked => {
+                root.activated(root.entry.id);
+            }
+        }
+
+        Rectangle {
+            border-radius: 8px;
+            background: Palette.accent;
+            opacity: (root.entry.enabled && area.has-hover) ? 1 : 0;
+            animate opacity { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+        }
+
+        Text {
+            x: 12px;
+            y: 0px;
+            height: parent.height;
+            text: root.entry.label;
+            color: root.entry.enabled ? Palette.text : Palette.secondary;
+            font-size: 13px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component Menu inherits Window {
+    background: transparent;
+    preferred-width: 270px;
+    preferred-height: 40px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <[MenuEntry]> entries;
+    /// Номер пункта (`id` из `MenuEntry`). Серые пункты не вызывают ничего.
+    callback activated(int);
+
+    VerticalLayout {
+        padding: 6px;
+        alignment: start;
+
+        for entry in root.entries: EntryView {
+            entry: entry;
+            activated(id) => {
+                root.activated(id);
+            }
+        }
+    }
+}

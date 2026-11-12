@@ -1,0 +1,40 @@
+export component Spike inherits Window {
+    width: 640px;
+    height: 120px;
+    background: transparent;
+    no-frame: true;
+    always-on-top: true;
+    forward-focus: input;
+    callback close-requested();
+
+    FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.close-requested();
+                return accept;
+            }
+            return reject;
+        }
+
+        Rectangle {
+            x: 20px;
+            y: 20px;
+            width: parent.width - 40px;
+            height: parent.height - 40px;
+            background: #1c1c1ecc;
+            border-radius: 28px;
+            border-width: 1px;
+            border-color: #ffffff30;
+
+            input := TextInput {
+                x: 24px;
+                width: parent.width - 48px;
+                height: parent.height;
+                vertical-alignment: center;
+                color: white;
+                font-size: 24px;
+                single-line: true;
+            }
+        }
+    }
+}

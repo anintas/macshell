@@ -1,0 +1,59 @@
+// Переключатель приложений (Alt+Tab в духе Cmd+Tab): ряд крупных значков, выбранный подсвечен, под рядом его название.
+// Размеры задаёт Rust (`switcher.rs`): плитка `tile`, отступ 18, зазор 8; высота окна tile + 62.
+import { Palette, AppPlaceholder } from "common.slint";
+
+export struct SwitchTile {
+    icon: image,
+    has-icon: bool,
+    name: string,
+}
+
+export component Switcher inherits Window {
+    background: transparent;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <[SwitchTile]> tiles;
+    in property <int> selected;
+    in property <length> tile: 96px;
+
+    for t[i] in root.tiles: Rectangle {
+        x: 18px + (root.tile + 8px) * i;
+        y: 18px;
+        width: root.tile;
+        height: root.tile;
+        border-radius: root.tile * 0.22;
+        background: i == root.selected ? #ffffff30 : #ffffff00;
+        border-width: i == root.selected ? 1px : 0px;
+        border-color: #ffffff40;
+        animate background { duration: Palette.animations-enabled ? 90ms : 0ms; easing: ease-out; }
+
+        if t.has-icon: Image {
+            source: t.icon;
+            width: root.tile * 0.67;
+            height: root.tile * 0.67;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            image-fit: contain;
+        }
+
+        if !t.has-icon: AppPlaceholder {
+            size: root.tile * 0.6;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+
+    Text {
+        x: 18px;
+        y: 18px + root.tile + 6px;
+        width: parent.width - 36px;
+        height: 24px;
+        text: root.selected >= 0 && root.selected < root.tiles.length ? root.tiles[root.selected].name : "";
+        color: Palette.text;
+        font-size: 14px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}

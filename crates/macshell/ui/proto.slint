@@ -1,0 +1,164 @@
+// Прототип Spotlight на стекле. Размеры в логических пикселях (панель 680 x 353, см. PANEL_* в main.rs).
+
+import { Icons, Palette, Glyph } from "common.slint";
+
+// Плитка значка: радиус 10 = радиус строки 18 минус отступ 8 (концентрично).
+component Tile inherits Rectangle {
+    in property <string> icon;
+    in property <bool> selected;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: root.selected ? #ffffff38 : #ffffff1f;
+    border-width: 1px;
+    border-color: #ffffff1f;
+
+    Glyph {
+        commands: root.icon;
+        size: 20px;
+        tint: Palette.text;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+}
+
+component ResultRow inherits Rectangle {
+    in property <string> icon;
+    in property <string> title;
+    in property <string> kind;
+    in property <bool> selected;
+    height: 50px;
+    border-radius: 18px;
+
+    if root.selected: Rectangle {
+        border-radius: root.border-radius;
+        background: Palette.accent;
+        border-width: 1px;
+        border-color: #ffffff2e;
+    }
+
+    Tile {
+        icon: root.icon;
+        selected: root.selected;
+        x: 8px;
+        y: (parent.height - self.height) / 2;
+    }
+
+    Text {
+        x: 54px;
+        y: 0px;
+        height: parent.height;
+        text: root.title;
+        color: Palette.text;
+        font-size: 15px;
+        font-weight: root.selected ? 600 : 400;
+        vertical-alignment: center;
+    }
+
+    if !root.selected: Text {
+        x: parent.width - self.width - 16px;
+        y: 0px;
+        height: parent.height;
+        text: root.kind;
+        color: Palette.secondary;
+        font-size: 13px;
+        vertical-alignment: center;
+    }
+
+    if root.selected: Rectangle {
+        width: 30px;
+        height: 24px;
+        x: parent.width - self.width - 14px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 8px;
+        background: #ffffff33;
+
+        Glyph {
+            commands: Icons.enter;
+            size: 14px;
+            tint: Palette.text;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+}
+
+component SectionLabel inherits Rectangle {
+    in property <string> text;
+    height: 28px;
+
+    Text {
+        x: 16px;
+        y: 0px;
+        height: parent.height;
+        text: root.text;
+        color: Palette.secondary;
+        font-size: 12px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+}
+
+export component Proto inherits Window {
+    background: transparent;
+    preferred-width: 680px;
+    preferred-height: 353px;
+    default-font-family: "Segoe UI Variable Display";
+
+    VerticalLayout {
+        padding: 12px;
+        alignment: start;
+
+        Rectangle {
+            height: 56px;
+
+            Glyph {
+                commands: Icons.magnifier;
+                size: 24px;
+                tint: Palette.secondary;
+                x: 16px;
+                y: (parent.height - self.height) / 2;
+            }
+
+            query := Text {
+                x: 54px;
+                y: 0px;
+                height: parent.height;
+                text: "нас";
+                color: Palette.text;
+                font-size: 24px;
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                x: query.x + query.width + 2px;
+                y: (parent.height - self.height) / 2;
+                width: 2px;
+                height: 28px;
+                border-radius: 1px;
+                background: Palette.caret;
+            }
+        }
+
+        Rectangle {
+            height: 9px;
+            Rectangle {
+                x: 8px;
+                y: 0px;
+                width: parent.width - 16px;
+                height: 1px;
+                background: Palette.hairline;
+            }
+        }
+
+        SectionLabel { text: "Лучшее совпадение"; }
+        ResultRow { icon: Icons.gear; title: "Настройки"; kind: "Параметры Windows"; selected: true; }
+
+        Rectangle { height: 8px; }
+
+        SectionLabel { text: "Другие параметры"; }
+        ResultRow { icon: Icons.speaker; title: "Настройки звука"; kind: "Система"; }
+        ResultRow { icon: Icons.monitor; title: "Настройки экрана"; kind: "Система"; }
+        ResultRow { icon: Icons.wifi; title: "Настройки сети"; kind: "Сеть и интернет"; }
+    }
+}

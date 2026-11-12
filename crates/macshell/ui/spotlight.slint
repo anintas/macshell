@@ -1,0 +1,463 @@
+// Spotlight: поле ввода с лупой и список результатов по секциям. Стекло под панелью рисует Rust, высота
+// панели зависит от числа строк (`panel-height`), окно всегда одного размера.
+// Радиусы концентричны: панель 30 = строка 18 + отступ 12, плитка 10 = строка 18 минус отступ 8.
+
+import { Icons, Palette, Glyph, AppPlaceholder } from "common.slint";
+
+export struct SpotlightLine {
+    /// Заголовок секции (`title`), а не результат.
+    header: bool,
+    /// У заголовка есть воздух сверху (не первая секция).
+    gap: bool,
+    title: string,
+    /// Пояснение справа: «Приложение», «Параметры Windows».
+    kind: string,
+    /// Имя значка из набора, если настоящего значка нет (страницы настроек, калькулятор).
+    glyph: string,
+    icon: image,
+    has-icon: bool,
+    /// Номер результата для выбора; у заголовка -1.
+    index: int,
+}
+
+/// Кнопка вкладки под полем: название и сочетание клавиш.
+export struct TabButton {
+    name: string,
+    hint: string,
+}
+
+component Tile inherits Rectangle {
+    in property <string> path;
+    in property <bool> selected;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: root.selected ? #ffffff38 : #ffffff1f;
+    border-width: 1px;
+    border-color: #ffffff1f;
+
+    Glyph {
+        commands: root.path;
+        size: 20px;
+        tint: Palette.text;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+}
+
+component ResultRow inherits Rectangle {
+    in property <SpotlightLine> line;
+    in property <bool> selected;
+    callback activated();
+    callback hovered();
+    border-radius: 25px;
+
+    pure function glyph-path(name: string) -> string {
+        if name == "monitor" {
+            return Icons.monitor;
+        }
+        if name == "speaker" {
+            return Icons.speaker;
+        }
+        if name == "wifi" {
+            return Icons.wifi;
+        }
+        if name == "battery-full" {
+            return Icons.battery-full;
+        }
+        if name == "calculator" {
+            return Icons.calculator;
+        }
+        if name == "bluetooth" {
+            return Icons.bluetooth;
+        }
+        if name == "lock" {
+            return Icons.lock;
+        }
+        if name == "power" {
+            return Icons.power;
+        }
+        if name == "moon" {
+            return Icons.moon;
+        }
+        if name == "camera" {
+            return Icons.camera;
+        }
+        if name == "trash" {
+            return Icons.trash;
+        }
+        if name == "terminal" {
+            return Icons.terminal;
+        }
+        if name == "clipboard" {
+            return Icons.clipboard;
+        }
+        if name == "folder" {
+            return Icons.folder;
+        }
+        return Icons.gear;
+    }
+
+    TouchArea {
+        clicked => {
+            root.activated();
+        }
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.move {
+                root.hovered();
+            }
+        }
+    }
+
+    // Выбор спокойнее прототипа: акцент просвечивает, а не заливает строку.
+    Rectangle {
+        border-radius: root.border-radius;
+        background: Palette.accent;
+        border-width: 1px;
+        border-color: #ffffff2e;
+        opacity: root.selected ? 0.82 : 0;
+        animate opacity { duration: Palette.animations-enabled ? 90ms : 0ms; easing: ease-out; }
+    }
+
+    if root.line.has-icon: Image {
+        source: root.line.icon;
+        width: 30px;
+        height: 30px;
+        x: 10px;
+        y: (parent.height - self.height) / 2;
+    }
+
+    if !root.line.has-icon && root.line.glyph == "": AppPlaceholder {
+        size: 28px;
+        x: 11px;
+        y: (parent.height - self.height) / 2;
+    }
+
+    if !root.line.has-icon && root.line.glyph != "": Tile {
+        path: root.glyph-path(root.line.glyph);
+        selected: root.selected;
+        x: 8px;
+        y: (parent.height - self.height) / 2;
+    }
+
+    Text {
+        x: 54px;
+        y: 0px;
+        width: parent.width - 54px - 100px;
+        height: parent.height;
+        text: root.line.title;
+        overflow: elide;
+        color: Palette.text;
+        font-size: 15px;
+        font-weight: root.selected ? 600 : 400;
+        vertical-alignment: center;
+    }
+
+    if !root.selected: Text {
+        x: parent.width - self.width - 16px;
+        y: 0px;
+        height: parent.height;
+        text: root.line.kind;
+        color: Palette.secondary;
+        font-size: 13px;
+        vertical-alignment: center;
+    }
+
+    if root.selected: Rectangle {
+        width: 30px;
+        height: 24px;
+        x: parent.width - self.width - 14px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 8px;
+        background: #ffffff33;
+
+        Glyph {
+            commands: Icons.enter;
+            size: 14px;
+            tint: Palette.text;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+}
+
+component Item inherits Rectangle {
+    in property <SpotlightLine> line;
+    in property <bool> selected;
+    /// Открыт предпросмотр: строки на его время прячутся и не занимают места.
+    in property <bool> hidden: false;
+    callback activated();
+    callback hovered();
+    visible: !root.hidden;
+    height: root.hidden ? 0px : root.line.header ? (root.line.gap ? 36px : 28px) : 50px;
+
+    if root.line.header: Text {
+        x: 16px;
+        y: root.line.gap ? 8px : 0px;
+        height: 28px;
+        text: root.line.title;
+        color: Palette.secondary;
+        font-size: 12px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+
+    if !root.line.header: ResultRow {
+        width: parent.width;
+        height: parent.height;
+        line: root.line;
+        selected: root.selected;
+        activated => {
+            root.activated();
+        }
+        hovered => {
+            root.hovered();
+        }
+    }
+}
+
+export component Spotlight inherits Window {
+    background: transparent;
+    preferred-width: 680px;
+    preferred-height: 560px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <string> query;
+    in property <string> placeholder: "Поиск";
+    in property <bool> caret-on: true;
+    in property <[SpotlightLine]> lines;
+    /// Номер выбранного результата.
+    in property <int> selected: -1;
+    /// Высота видимой панели без пустого места под ней: по ней Rust рисует стекло.
+    out property <length> panel-height: lay.preferred-height;
+    callback activated(int);
+    callback hovered(int);
+    /// Кнопки вкладок под полем: видны при пустом запросе и на любой вкладке.
+    in property <[TabButton]> tab-buttons;
+    in property <bool> tabs-visible: false;
+    /// Подсвеченная кнопка; -1 у обычного поиска.
+    in property <int> active-tab: -1;
+    callback tab-selected(int);
+    /// Надпись вместо списка, когда на вкладке нечего показать.
+    in property <string> empty-text;
+    /// Предпросмотр выбранного результата (Quick Look): миниатюра или значок, название, сведения, начало текста.
+    in property <bool> preview-open: false;
+    in property <image> preview-image;
+    in property <bool> preview-has-image: false;
+    in property <string> preview-title;
+    in property <string> preview-meta;
+    in property <string> preview-text;
+
+    lay := VerticalLayout {
+        padding: 12px;
+        alignment: start;
+
+        Rectangle {
+            height: 56px;
+
+            Glyph {
+                commands: Icons.magnifier;
+                size: 24px;
+                tint: Palette.secondary;
+                x: 16px;
+                y: (parent.height - self.height) / 2;
+            }
+
+            if root.query == "": Text {
+                x: 54px;
+                y: 0px;
+                height: parent.height;
+                text: root.placeholder;
+                color: Palette.secondary;
+                font-size: 24px;
+                vertical-alignment: center;
+            }
+
+            typed := Text {
+                x: 54px;
+                y: 0px;
+                width: min(self.preferred-width, parent.width - 54px - 24px);
+                height: parent.height;
+                text: root.query;
+                overflow: elide;
+                color: Palette.text;
+                font-size: 24px;
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                x: root.query == "" ? 54px : typed.x + typed.width + 2px;
+                y: (parent.height - self.height) / 2;
+                width: 2px;
+                height: 28px;
+                border-radius: 1px;
+                background: Palette.caret;
+                opacity: root.caret-on ? 1 : 0;
+            }
+        }
+
+        // Вкладки: Приложения (окном), Файлы, Действия, Буфер. Выбранная светлее, справа от названия сочетание.
+        if root.tabs-visible: HorizontalLayout {
+            height: 36px;
+            padding-left: 8px;
+            padding-right: 8px;
+            padding-top: 2px;
+            padding-bottom: 4px;
+            spacing: 6px;
+            alignment: start;
+
+            for tab[i] in root.tab-buttons: Rectangle {
+                width: tab-label.preferred-width + tab-hint.preferred-width + 30px;
+                border-radius: 14px;
+                background: i == root.active-tab ? #ffffff38 : tab-area.pressed ? #ffffff26 : tab-area.has-hover ? #ffffff17 : #ffffff0d;
+                animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+                tab-label := Text {
+                    x: 12px;
+                    height: parent.height;
+                    text: tab.name;
+                    color: Palette.text;
+                    font-size: 13px;
+                    font-weight: i == root.active-tab ? 600 : 400;
+                    vertical-alignment: center;
+                }
+
+                tab-hint := Text {
+                    x: tab-label.x + tab-label.preferred-width + 6px;
+                    height: parent.height;
+                    text: tab.hint;
+                    color: Palette.secondary;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+
+                tab-area := TouchArea {
+                    clicked => {
+                        root.tab-selected(i);
+                    }
+                }
+            }
+        }
+
+        if root.lines.length == 0 && root.empty-text != "": Text {
+            height: 48px;
+            text: root.empty-text;
+            color: Palette.secondary;
+            font-size: 14px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        if root.preview-open: Rectangle {
+            height: 308px;
+
+            Rectangle {
+                x: 8px;
+                y: 4px;
+                width: parent.width - 16px;
+                height: 1px;
+                background: Palette.hairline;
+            }
+
+            Rectangle {
+                x: 16px;
+                y: 18px;
+                width: 252px;
+                height: 252px;
+                border-radius: 14px;
+                background: #ffffff10;
+
+                if root.preview-has-image: Image {
+                    source: root.preview-image;
+                    x: 8px;
+                    y: 8px;
+                    width: parent.width - 16px;
+                    height: parent.height - 16px;
+                    image-fit: contain;
+                }
+
+                if !root.preview-has-image: Glyph {
+                    commands: Icons.folder;
+                    size: 64px;
+                    tint: Palette.secondary;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+
+            Text {
+                x: 284px;
+                y: 18px;
+                width: parent.width - 284px - 16px;
+                height: 48px;
+                text: root.preview-title;
+                wrap: word-wrap;
+                overflow: elide;
+                color: Palette.text;
+                font-size: 18px;
+                font-weight: 600;
+                vertical-alignment: top;
+            }
+
+            Text {
+                x: 284px;
+                y: 70px;
+                width: parent.width - 284px - 16px;
+                height: 34px;
+                text: root.preview-meta;
+                wrap: word-wrap;
+                overflow: elide;
+                color: Palette.secondary;
+                font-size: 13px;
+                vertical-alignment: top;
+            }
+
+            Text {
+                x: 284px;
+                y: 112px;
+                width: parent.width - 284px - 16px;
+                height: 158px;
+                text: root.preview-text;
+                overflow: elide;
+                color: Palette.text;
+                font-family: "Cascadia Mono";
+                font-size: 12px;
+                vertical-alignment: top;
+            }
+
+            Text {
+                x: 16px;
+                y: 280px;
+                width: parent.width - 32px;
+                height: 20px;
+                text: "Ctrl+Y или Esc: закрыть просмотр";
+                color: Palette.secondary;
+                font-size: 11px;
+                vertical-alignment: center;
+            }
+        }
+
+        if root.lines.length > 0 && !root.preview-open: Rectangle {
+            height: 9px;
+            Rectangle {
+                x: 8px;
+                y: 0px;
+                width: parent.width - 16px;
+                height: 1px;
+                background: Palette.hairline;
+            }
+        }
+
+        for line in root.lines: Item {
+            line: line;
+            hidden: root.preview-open;
+            selected: !line.header && line.index == root.selected;
+            activated => {
+                root.activated(line.index);
+            }
+            hovered => {
+                root.hovered(line.index);
+            }
+        }
+    }
+}

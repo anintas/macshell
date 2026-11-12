@@ -1,0 +1,171 @@
+// Окно звука под значком динамика: кнопка «без звука», ползунок и проценты (первые 52 px), ниже устройства
+// вывода и ввода и ссылка на параметры звука. Ширина 240, высота зависит от числа строк.
+import { Palette, Glyph, Icons } from "common.slint";
+
+/// Строка под ползунком: заголовок раздела («Вывод», «Ввод») или устройство; текущее устройство отмечено точкой.
+export struct SoundRow {
+    text: string,
+    header: bool,
+    current: bool,
+}
+
+export component VolumePopup inherits Window {
+    background: transparent;
+    preferred-width: 240px;
+    preferred-height: 52px;
+    default-font-family: "Segoe UI Variable Display";
+
+    /// Громкость от 0 до 1.
+    in property <float> level;
+    in property <bool> muted;
+    /// Новое значение от 0 до 1: Rust ставит его в систему и возвращает в `level`.
+    callback level-changed(float);
+    callback mute-toggled();
+    in property <[SoundRow]> rows;
+    callback row-clicked(int);
+
+    property <float> shown: root.muted ? 0 : root.level;
+
+    // Кнопка звука.
+    Rectangle {
+        x: 10px;
+        y: 10px;
+        width: 32px;
+        height: 32px;
+        border-radius: 16px;
+        background: mute-area.pressed ? #ffffff2e : mute-area.has-hover ? #ffffff1f : #ffffff00;
+        animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+        Glyph {
+            size: 18px;
+            tint: Palette.text;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            commands: root.shown <= 0.005 ? Icons.speaker-off : root.shown < 0.5 ? Icons.speaker-low : Icons.speaker;
+        }
+
+        mute-area := TouchArea {
+            clicked => {
+                root.mute-toggled();
+            }
+        }
+    }
+
+    // Ползунок: дорожка 6 px, ручка 18 px. Нажатая область выше дорожки, чтобы попасть было легко.
+    track := Rectangle {
+        x: 52px;
+        y: 0px;
+        width: parent.width - 52px - 52px;
+        height: 52px;
+
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: parent.width;
+            height: 6px;
+            border-radius: 3px;
+            background: #ffffff33;
+
+            Rectangle {
+                x: 0px;
+                y: 0px;
+                width: parent.width * root.shown;
+                height: parent.height;
+                border-radius: 3px;
+                background: Palette.text;
+            }
+        }
+
+        Rectangle {
+            width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            x: (parent.width - self.width) * root.shown;
+            y: (parent.height - self.height) / 2;
+            background: white;
+            border-width: 1px;
+            border-color: #00000026;
+        }
+
+        slider-area := TouchArea {
+            pointer-event(e) => {
+                if e.kind == PointerEventKind.down {
+                    root.level-changed(clamp((self.mouse-x - 9px) / (self.width - 18px), 0, 1));
+                }
+            }
+            moved => {
+                if self.pressed {
+                    root.level-changed(clamp((self.mouse-x - 9px) / (self.width - 18px), 0, 1));
+                }
+            }
+        }
+    }
+
+    Text {
+        x: parent.width - 46px;
+        y: 0px;
+        width: 36px;
+        height: 52px;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+        text: Math.round(root.shown * 100) + "%";
+        color: Palette.secondary;
+        font-size: 12px;
+    }
+
+    // Устройства: заголовки по 24 px, строки по 28 px.
+    VerticalLayout {
+        x: 0px;
+        y: 56px;
+        width: parent.width;
+
+        for row[i] in root.rows: Rectangle {
+            height: row.header ? 24px : 28px;
+
+            if row.header: Text {
+                x: 16px;
+                width: parent.width - 32px;
+                height: parent.height;
+                text: row.text;
+                color: Palette.secondary;
+                font-size: 11px;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+
+            if !row.header: Rectangle {
+                x: 6px;
+                width: parent.width - 12px;
+                height: parent.height;
+                border-radius: 10px;
+                background: row-area.pressed ? #ffffff2e : row-area.has-hover ? #ffffff1f : #ffffff00;
+                animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+                if row.current: Rectangle {
+                    x: 10px;
+                    y: (parent.height - self.height) / 2;
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 3.5px;
+                    background: Palette.caret;
+                }
+
+                Text {
+                    x: 26px;
+                    width: parent.width - 26px - 10px;
+                    height: parent.height;
+                    text: row.text;
+                    color: Palette.text;
+                    font-size: 13px;
+                    overflow: elide;
+                    vertical-alignment: center;
+                }
+
+                row-area := TouchArea {
+                    clicked => {
+                        root.row-clicked(i);
+                    }
+                }
+            }
+        }
+    }
+}

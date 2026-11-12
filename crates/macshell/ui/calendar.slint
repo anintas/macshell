@@ -1,0 +1,283 @@
+// Календарь под часами: месяц с неделей от понедельника. Размер 280 x 292.
+// Радиус окна 20 = радиус сегодняшнего дня 14 + отступ 6 (концентрично с кружком даты).
+import { Palette, Glyph, Icons } from "common.slint";
+
+export struct CalDay {
+    text: string,
+    in-month: bool,
+    today: bool,
+}
+
+component NavButton inherits Rectangle {
+    in property <string> label;
+    callback clicked();
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    background: nav-area.pressed ? #ffffff2e : nav-area.has-hover ? #ffffff1f : #ffffff00;
+    animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+    Text {
+        text: root.label;
+        color: Palette.text;
+        font-size: 22px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        width: parent.width;
+        height: parent.height;
+    }
+
+    nav-area := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component CalendarPopup inherits Window {
+    background: transparent;
+    preferred-width: 280px;
+    preferred-height: root.panel ? 452px : 292px;
+    default-font-family: "Segoe UI Variable Display";
+
+    /// Центр уведомлений под часами: под месяцем «Не беспокоить» и ссылка на родной центр Windows.
+    in property <bool> panel;
+    in property <bool> dnd-on;
+    callback dnd-toggled();
+    callback windows-notifications();
+    in property <string> month-title;
+    in property <bool> other-month: false;
+    in property <bool> keyboard-active: false;
+    in property <[string]> weekdays;
+    in property <[CalDay]> days;
+    callback prev();
+    callback next();
+    callback today();
+
+    Text {
+        x: 20px;
+        y: 14px;
+        height: 32px;
+        text: root.month-title;
+        color: Palette.text;
+        font-size: 15px;
+        font-weight: 700;
+        vertical-alignment: center;
+    }
+
+    NavButton {
+        x: parent.width - 126px;
+        y: 16px;
+        label: "‹";
+        clicked => {
+            root.prev();
+        }
+    }
+
+    // Возврат к текущему месяцу показывается только при переходе в другой.
+    if root.other-month: Rectangle {
+        x: parent.width - 96px;
+        y: 16px;
+        width: 52px;
+        height: 28px;
+        border-radius: 14px;
+        background: today-area.pressed ? #ffffff2e : today-area.has-hover ? #ffffff1f : #ffffff00;
+        animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: "Сегодня";
+            color: Palette.text;
+            font-size: 10px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        today-area := TouchArea {
+            clicked => {
+                root.today();
+            }
+        }
+    }
+
+    NavButton {
+        x: parent.width - 14px - 28px;
+        y: 16px;
+        label: "›";
+        clicked => {
+            root.next();
+        }
+    }
+
+    for name[i] in root.weekdays: Text {
+        x: 14px + i * 36px;
+        y: 52px;
+        width: 36px;
+        height: 22px;
+        text: name;
+        color: i >= 5 ? Palette.secondary.with-alpha(0.55) : Palette.secondary;
+        font-size: 11px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    for d[i] in root.days: Rectangle {
+        x: 14px + Math.mod(i, 7) * 36px;
+        y: 78px + Math.floor(i / 7) * (34px + (root.panel ? 0px : max(0px, root.height - 292px) / 6));
+        width: 36px;
+        height: 34px;
+
+        if d.today: Rectangle {
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: Palette.accent;
+        }
+
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: d.text;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-size: 13px;
+            font-weight: d.today ? 700 : 400;
+            color: d.today ? (Palette.accent == #8a8f9b ? #17191e : white) : d.in-month ? Palette.text : Palette.text.with-alpha(0.45);
+        }
+    }
+
+    if root.keyboard-active && !root.panel && root.height > 292px: Text {
+        x: 20px;
+        y: parent.height - 19px;
+        width: parent.width - 40px;
+        height: 14px;
+        text: "← → месяц   ·   Home сегодня";
+        color: Palette.secondary;
+        font-size: 10px;
+        horizontal-alignment: center;
+    }
+
+    // Центр уведомлений: карточки под месяцем.
+    if root.panel: Rectangle {
+        x: 14px;
+        y: 304px;
+        width: parent.width - 28px;
+        height: 44px;
+        border-radius: 14px;
+        background: dnd-area.pressed ? #ffffff2e : dnd-area.has-hover ? #ffffff22 : #ffffff14;
+        animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+        Rectangle {
+            x: 8px;
+            y: 6px;
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: root.dnd-on ? Palette.accent : #ffffff26;
+
+            Glyph {
+                size: 17px;
+                tint: white;
+                commands: Icons.bell-slash;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            x: 50px;
+            width: parent.width - 50px - 60px;
+            height: parent.height;
+            text: "Не беспокоить";
+            color: Palette.text;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            x: parent.width - 52px;
+            y: 9px;
+            width: 40px;
+            height: 24px;
+            border-radius: 12px;
+            background: root.dnd-on ? Palette.accent : #ffffff2e;
+            animate background { duration: Palette.animations-enabled ? 140ms : 0ms; easing: ease-out; }
+
+            Rectangle {
+                x: root.dnd-on ? parent.width - self.width - 2px : 2px;
+                y: 2px;
+                width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background: white;
+                animate x { duration: Palette.animations-enabled ? 140ms : 0ms; easing: ease-out; }
+            }
+        }
+
+        dnd-area := TouchArea {
+            clicked => {
+                root.dnd-toggled();
+            }
+        }
+    }
+
+    if root.panel: Rectangle {
+        x: 14px;
+        y: 356px;
+        width: parent.width - 28px;
+        height: 44px;
+        border-radius: 14px;
+        background: win-area.pressed ? #ffffff2e : win-area.has-hover ? #ffffff22 : #ffffff14;
+        animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+        Glyph {
+            size: 18px;
+            tint: Palette.text;
+            commands: Icons.clipboard;
+            x: 16px;
+            y: (parent.height - self.height) / 2;
+        }
+
+        Text {
+            x: 50px;
+            width: parent.width - 50px - 30px;
+            height: parent.height;
+            text: "Уведомления Windows";
+            color: Palette.text;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+
+        Glyph {
+            size: 13px;
+            tint: Palette.secondary;
+            commands: Icons.chevron-right;
+            x: parent.width - self.width - 16px;
+            y: (parent.height - self.height) / 2;
+        }
+
+        win-area := TouchArea {
+            clicked => {
+                root.windows-notifications();
+            }
+        }
+    }
+
+    if root.panel: Text {
+        x: 20px;
+        y: 406px;
+        width: parent.width - 40px;
+        height: 36px;
+        text: "Текст уведомлений Windows не отдаёт сторонним программам: они остаются в родном центре.";
+        color: Palette.secondary;
+        font-size: 10px;
+        wrap: word-wrap;
+        vertical-alignment: top;
+    }
+}

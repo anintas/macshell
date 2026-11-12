@@ -1,0 +1,554 @@
+// Центр управления под значком в строке меню: плитки Wi-Fi, Bluetooth, тёмной темы, «Не беспокоить», ночного света и
+// трансляции, ползунки яркости (если монитор её отдаёт) и громкости, «Сейчас играет», ссылки на параметры.
+// Ширина 316, плитки 142 x 60 с зазором 8; высота зависит от ползунка яркости.
+import { Palette, Glyph, Icons } from "common.slint";
+import { ListPanel, ListRow } from "listpanel.slint";
+
+component CcTile inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <string> icon;
+    in property <bool> on;
+    /// У плитки есть вторая страница: значок переключает, остальная плитка открывает страницу.
+    in property <bool> expandable;
+    in property <bool> keyboard-detail: false;
+    in property <bool> keyboard-icon: false;
+    callback clicked();
+    callback expand();
+    height: 60px;
+    border-radius: 18px;
+    background: area.pressed ? #ffffff2e : area.has-hover ? #ffffff22 : #ffffff14;
+    border-width: root.keyboard-detail ? 2px : root.on ? 1px : 0px;
+    border-color: root.keyboard-detail ? white : #ffffff52;
+    animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+    // Значок в круге: у включённой плитки круг цвета акцента.
+    Rectangle {
+        x: 10px;
+        y: (parent.height - self.height) / 2;
+        width: 34px;
+        height: 34px;
+        border-radius: 17px;
+        background: root.on ? Palette.accent : #ffffff26;
+        border-width: root.keyboard-icon ? 2px : 0px;
+        border-color: white;
+
+        Glyph {
+            commands: root.icon;
+            size: 18px;
+            tint: root.on && Palette.accent == #8a8f9b ? #17191e : white;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+
+        if root.expandable: Rectangle {
+            border-radius: parent.border-radius;
+            background: icon-area.pressed ? #ffffff40 : icon-area.has-hover ? #ffffff26 : #ffffff00;
+            animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+        }
+    }
+
+    if root.expandable: Glyph {
+        size: 12px;
+        tint: Palette.secondary;
+        commands: Icons.chevron-right;
+        x: parent.width - self.width - 10px;
+        y: (parent.height - self.height) / 2;
+    }
+
+    Text {
+        x: 52px;
+        y: root.subtitle == "" ? (parent.height - 18px) / 2 : 12px;
+        width: parent.width - 52px - (root.expandable ? 22px : 6px);
+        height: 18px;
+        text: root.title;
+        color: Palette.text;
+        font-size: 12px;
+        font-weight: 600;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: 52px;
+        y: 31px;
+        width: parent.width - 52px - 6px;
+        height: 16px;
+        text: root.subtitle;
+        color: Palette.secondary;
+        font-size: 11px;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+
+    area := TouchArea {
+        x: root.expandable ? 50px : 0px;
+        width: parent.width - self.x;
+        clicked => {
+            if root.expandable {
+                root.expand();
+            } else {
+                root.clicked();
+            }
+        }
+    }
+
+    icon-area := TouchArea {
+        x: 10px;
+        y: (parent.height - 34px) / 2;
+        width: 34px;
+        height: 34px;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+/// Ползунок с кнопкой слева: дорожка 6 px с ручкой 18 px и проценты справа.
+component CcSlider inherits Rectangle {
+    in property <float> value;
+    in property <string> icon;
+    in property <bool> keyboard-focus: false;
+    callback changed(float);
+    callback icon-clicked();
+    height: 52px;
+    border-radius: 18px;
+    background: #ffffff14;
+    border-width: root.keyboard-focus ? 2px : 0px;
+    border-color: white;
+
+    Rectangle {
+        x: 10px;
+        y: 10px;
+        width: 32px;
+        height: 32px;
+        border-radius: 16px;
+        background: icon-area.pressed ? #ffffff2e : icon-area.has-hover ? #ffffff1f : #ffffff00;
+        animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+        Glyph {
+            size: 18px;
+            tint: Palette.text;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            commands: root.icon;
+        }
+
+        icon-area := TouchArea {
+            clicked => {
+                root.icon-clicked();
+            }
+        }
+    }
+
+    Rectangle {
+        x: 52px;
+        y: 0px;
+        width: parent.width - 52px - 52px;
+        height: parent.height;
+
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: parent.width;
+            height: 6px;
+            border-radius: 3px;
+            background: #ffffff33;
+
+            Rectangle {
+                x: 0px;
+                y: 0px;
+                width: parent.width * root.value;
+                height: parent.height;
+                border-radius: 3px;
+                background: Palette.text;
+            }
+        }
+
+        Rectangle {
+            width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            x: (parent.width - self.width) * root.value;
+            y: (parent.height - self.height) / 2;
+            background: white;
+            border-width: 1px;
+            border-color: #00000026;
+        }
+
+        TouchArea {
+            pointer-event(e) => {
+                if e.kind == PointerEventKind.down {
+                    root.changed(clamp((self.mouse-x - 9px) / (self.width - 18px), 0, 1));
+                }
+            }
+            moved => {
+                if self.pressed {
+                    root.changed(clamp((self.mouse-x - 9px) / (self.width - 18px), 0, 1));
+                }
+            }
+        }
+    }
+
+    Text {
+        x: parent.width - 46px;
+        y: 0px;
+        width: 36px;
+        height: parent.height;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+        text: Math.round(root.value * 100) + "%";
+        color: Palette.secondary;
+        font-size: 12px;
+    }
+}
+
+/// Круглая кнопка карточки «Сейчас играет».
+component MediaButton inherits Rectangle {
+    in property <string> icon;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    background: btn-area.pressed ? #ffffff2e : btn-area.has-hover && root.enabled ? #ffffff1f : #ffffff00;
+    animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+    Glyph {
+        size: 18px;
+        tint: root.enabled ? Palette.text : Palette.secondary;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        commands: root.icon;
+    }
+
+    btn-area := TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component ControlCenter inherits Window {
+    background: transparent;
+    preferred-width: 316px;
+    preferred-height: root.standalone ? list.panel-height : root.panel-height;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <string> wifi-subtitle;
+    in property <bool> wifi-on: true;
+    in property <string> bluetooth-subtitle;
+    in property <bool> bluetooth-on;
+    /// Страница вместо плиток: 0 плитки, 1 Bluetooth, 2 Wi-Fi. `standalone`: окно открыто только ради страницы
+    /// (значок в строке меню), без стрелки «назад».
+    in property <int> page;
+    in property <bool> standalone;
+    in property <string> list-title;
+    in property <string> list-heading;
+    in property <bool> list-on;
+    in property <bool> list-available: true;
+    in property <string> list-state;
+    in property <[ListRow]> list-rows;
+    in property <string> list-empty;
+    in property <string> list-footer;
+    /// Высота тела страницы: окно постоянного размера, панель занимает его целиком.
+    in property <length> list-body-h: 100px;
+    out property <length> list-height: list.panel-height;
+    in property <bool> dark-on;
+    in property <bool> focus-on;
+    /// Громкость от 0 до 1.
+    in property <float> level;
+    in property <bool> muted;
+    /// Ползунок яркости виден, только если монитор отдаёт яркость по DDC/CI.
+    in property <bool> has-brightness;
+    in property <float> brightness;
+    in property <string> media-title: "Ничего не играет";
+    in-out property <int> keyboard-focus: -1;
+    in property <string> media-artist;
+    in property <bool> media-active;
+    in property <bool> media-playing;
+    callback wifi-clicked();
+    callback bluetooth-clicked();
+    callback bluetooth-expand();
+    callback wifi-expand();
+    callback list-toggled();
+    callback list-back();
+    callback list-row-clicked(int);
+    callback list-settings();
+    callback dark-clicked();
+    callback focus-clicked();
+    callback night-clicked();
+    callback cast-clicked();
+    callback display-clicked();
+    callback settings-clicked();
+    callback level-changed(float);
+    callback brightness-changed(float);
+    callback mute-toggled();
+    callback media-previous();
+    callback media-play-pause();
+    callback media-next();
+
+    property <float> shown: root.muted ? 0 : root.level;
+    // Связь, ползунки и медиа идут первыми; остальные действия собраны ниже.
+    property <length> sound-y: root.has-brightness ? 140px : 80px;
+    property <length> media-y: root.sound-y + 60px;
+    property <length> actions-y: root.media-y + 76px;
+    property <length> bottom-y: root.actions-y + 136px;
+    out property <length> panel-height: root.bottom-y + 44px + 12px;
+
+    main := Rectangle {
+        width: parent.width;
+        height: parent.height;
+        visible: root.page == 0;
+
+    CcTile {
+        x: 12px;
+        y: 12px;
+        width: 142px;
+        title: "Wi-Fi";
+        subtitle: root.wifi-subtitle;
+        icon: root.wifi-on ? Icons.wifi : Icons.wifi-off;
+        on: root.wifi-on;
+        expandable: true;
+        keyboard-detail: root.keyboard-focus == 0;
+        keyboard-icon: root.keyboard-focus == 1;
+        clicked => {
+            root.wifi-clicked();
+        }
+        expand => {
+            root.wifi-expand();
+        }
+    }
+
+    CcTile {
+        x: 162px;
+        y: 12px;
+        width: 142px;
+        title: "Bluetooth";
+        subtitle: root.bluetooth-subtitle;
+        icon: Icons.bluetooth;
+        on: root.bluetooth-on;
+        expandable: true;
+        keyboard-detail: root.keyboard-focus == 2;
+        keyboard-icon: root.keyboard-focus == 3;
+        clicked => {
+            root.bluetooth-clicked();
+        }
+        expand => {
+            root.bluetooth-expand();
+        }
+    }
+
+    CcTile {
+        x: 12px;
+        y: root.actions-y;
+        width: 142px;
+        title: "Тёмная тема";
+        subtitle: root.dark-on ? "Вкл." : "Выкл.";
+        icon: Icons.moon;
+        on: root.dark-on;
+        keyboard-detail: root.keyboard-focus == 7;
+        clicked => {
+            root.dark-clicked();
+        }
+    }
+
+    CcTile {
+        x: 162px;
+        y: root.actions-y;
+        width: 142px;
+        title: "Не беспокоить";
+        subtitle: root.focus-on ? "Вкл." : "Выкл.";
+        icon: Icons.bell-slash;
+        on: root.focus-on;
+        keyboard-detail: root.keyboard-focus == 8;
+        clicked => {
+            root.focus-clicked();
+        }
+    }
+
+    CcTile {
+        x: 12px;
+        y: root.actions-y + 68px;
+        width: 142px;
+        title: "Ночной свет";
+        subtitle: "Параметры";
+        icon: Icons.sun-dim;
+        on: false;
+        keyboard-detail: root.keyboard-focus == 9;
+        clicked => {
+            root.night-clicked();
+        }
+    }
+
+    CcTile {
+        x: 162px;
+        y: root.actions-y + 68px;
+        width: 142px;
+        title: "Трансляция";
+        subtitle: "Win+K";
+        icon: Icons.screencast;
+        on: false;
+        keyboard-detail: root.keyboard-focus == 10;
+        clicked => {
+            root.cast-clicked();
+        }
+    }
+
+    if root.has-brightness: CcSlider {
+        x: 12px;
+        y: 80px;
+        width: 292px;
+        value: root.brightness;
+        icon: Icons.sun;
+        keyboard-focus: root.keyboard-focus == 4;
+        changed(v) => {
+            root.brightness-changed(v);
+        }
+    }
+
+    CcSlider {
+        x: 12px;
+        y: root.sound-y;
+        width: 292px;
+        value: root.shown;
+        icon: root.shown <= 0.005 ? Icons.speaker-off : root.shown < 0.5 ? Icons.speaker-low : Icons.speaker;
+        keyboard-focus: root.keyboard-focus == 5;
+        changed(v) => {
+            root.level-changed(v);
+        }
+        icon-clicked => {
+            root.mute-toggled();
+        }
+    }
+
+    // Сейчас играет: название и исполнитель слева, назад, пауза и вперёд справа.
+    Rectangle {
+        x: 12px;
+        y: root.media-y;
+        width: 292px;
+        height: 68px;
+        border-radius: 18px;
+        background: #ffffff14;
+        border-width: root.keyboard-focus == 6 ? 2px : 0px;
+        border-color: white;
+
+        Text {
+            x: 16px;
+            y: root.media-artist == "" ? 0px : 12px;
+            width: parent.width - 16px - 124px;
+            height: root.media-artist == "" ? parent.height : 22px;
+            text: root.media-title;
+            overflow: elide;
+            color: root.media-active ? Palette.text : Palette.secondary;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+
+        if root.media-artist != "": Text {
+            x: 16px;
+            y: 36px;
+            width: parent.width - 16px - 124px;
+            height: 20px;
+            text: root.media-artist;
+            overflow: elide;
+            color: Palette.secondary;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+
+        MediaButton {
+            x: parent.width - 120px;
+            y: 16px;
+            icon: Icons.skip-back;
+            enabled: root.media-active;
+            clicked => {
+                root.media-previous();
+            }
+        }
+
+        MediaButton {
+            x: parent.width - 80px;
+            y: 16px;
+            icon: root.media-playing ? Icons.pause : Icons.play;
+            enabled: root.media-active;
+            clicked => {
+                root.media-play-pause();
+            }
+        }
+
+        MediaButton {
+            x: parent.width - 40px;
+            y: 16px;
+            icon: Icons.skip-forward;
+            enabled: root.media-active;
+            clicked => {
+                root.media-next();
+            }
+        }
+    }
+
+    CcTile {
+        x: 12px;
+        y: root.bottom-y;
+        width: 142px;
+        height: 44px;
+        title: "Дисплей";
+        subtitle: "";
+        icon: Icons.monitor;
+        on: false;
+        keyboard-detail: root.keyboard-focus == 11;
+        clicked => {
+            root.display-clicked();
+        }
+    }
+
+    CcTile {
+        x: 162px;
+        y: root.bottom-y;
+        width: 142px;
+        height: 44px;
+        title: "Параметры";
+        subtitle: "";
+        icon: Icons.gear;
+        on: false;
+        keyboard-detail: root.keyboard-focus == 12;
+        clicked => {
+            root.settings-clicked();
+        }
+    }
+    }
+
+    list := ListPanel {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: self.panel-height;
+        visible: root.page != 0;
+        keyboard-focus: root.keyboard-focus;
+        title: root.list-title;
+        list-title: root.list-heading;
+        icon: root.page == 2 ? (root.list-on ? Icons.wifi : Icons.wifi-off) : Icons.bluetooth;
+        on: root.list-on;
+        available: root.list-available;
+        state-text: root.list-state;
+        rows: root.list-rows;
+        empty-text: root.list-empty;
+        footer-text: root.list-footer;
+        back-visible: !root.standalone;
+        min-body-h: root.list-body-h;
+        back => {
+            root.list-back();
+        }
+        toggled => {
+            root.list-toggled();
+        }
+        row-clicked(i) => {
+            root.list-row-clicked(i);
+        }
+        settings => {
+            root.list-settings();
+        }
+    }
+}

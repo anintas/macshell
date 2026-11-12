@@ -1,0 +1,531 @@
+// Виджеты на рабочем столе: часы, нагрузка системы, погода, что играет, диски, курсы валют. Календарь это `CalendarPopup` из calendar.slint. Стекло под
+// окном (размытые обои) рисует Rust, здесь только содержимое: текст слева, крупные цифры, тонкие шкалы.
+import { Palette, Glyph, Icons } from "common.slint";
+
+// Ненажимаемая подсказка, которую хост рисует только во время привязки.
+export component WidgetGuide inherits Window {
+    background: transparent;
+    in property <string> hint;
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        border-radius: 22px;
+        border-width: 2px;
+        border-color: #e3e8f7e8;
+        background: transparent;
+    }
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: 8px;
+        width: label.preferred-width + 20px;
+        height: 26px;
+        border-radius: 13px;
+        background: #24272ef5;
+        border-width: 1px;
+        border-color: #ffffff70;
+        label := Text {
+            x: 10px;
+            height: parent.height;
+            text: root.hint;
+            color: Palette.text;
+            font-size: 11px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component ClockWidget inherits Window {
+    background: transparent;
+    preferred-width: 220px;
+    preferred-height: 150px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <string> time;
+    in property <string> date;
+
+    Text {
+        x: 22px;
+        y: 20px;
+        width: parent.width - 44px;
+        height: 20px;
+        text: root.date;
+        color: Palette.caret;
+        font-size: 13px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: 20px;
+        y: 44px;
+        width: parent.width - 40px;
+        height: 90px;
+        text: root.time;
+        color: Palette.text;
+        font-size: 66px;
+        font-weight: 300;
+        vertical-alignment: center;
+    }
+}
+
+component Meter inherits Rectangle {
+    in property <float> value;
+    in property <string> title;
+    in property <string> caption;
+    in property <string> big;
+    height: 52px;
+
+    Text {
+        x: 0px;
+        y: 0px;
+        width: parent.width - 80px;
+        height: 18px;
+        text: root.title;
+        color: Palette.secondary;
+        font-size: 12px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: 0px;
+        y: 16px;
+        width: parent.width - 80px;
+        height: 22px;
+        text: root.caption;
+        color: Palette.secondary;
+        font-size: 11px;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: parent.width - 90px;
+        y: 0px;
+        width: 90px;
+        height: 36px;
+        text: root.big;
+        color: Palette.text;
+        font-size: 28px;
+        font-weight: 300;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+    }
+
+    Rectangle {
+        y: 42px;
+        width: parent.width;
+        height: 6px;
+        border-radius: 3px;
+        background: #ffffff26;
+
+        Rectangle {
+            x: 0px;
+            width: max(6px, parent.width * clamp(root.value, 0, 1));
+            height: parent.height;
+            border-radius: 3px;
+            background: @linear-gradient(90deg, Palette.accent-top, Palette.caret);
+        }
+    }
+}
+
+export component SystemWidget inherits Window {
+    background: transparent;
+    preferred-width: 220px;
+    preferred-height: 150px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <float> cpu;
+    in property <string> cpu-text;
+    in property <float> memory;
+    in property <string> memory-text;
+    in property <string> memory-percent;
+
+    Meter {
+        x: 20px;
+        y: 16px;
+        width: parent.width - 40px;
+        value: root.cpu;
+        title: "Процессор";
+        caption: "";
+        big: root.cpu-text;
+    }
+
+    Meter {
+        x: 20px;
+        y: 82px;
+        width: parent.width - 40px;
+        value: root.memory;
+        title: "Память";
+        caption: root.memory-text;
+        big: root.memory-percent;
+    }
+}
+
+export struct DriveInfo {
+    name: string,
+    caption: string,
+    value: float,
+}
+
+export struct RateRow {
+    code: string,
+    value: string,
+}
+
+component RoundTap inherits Rectangle {
+    in property <string> icon;
+    in property <length> size: 36px;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    background: tap.pressed ? #ffffff38 : tap.has-hover && root.enabled ? #ffffff24 : #ffffff00;
+    animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+    Glyph {
+        size: root.size * 0.5;
+        tint: root.enabled ? Palette.text : Palette.secondary;
+        commands: root.icon;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    tap := TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component WeatherWidget inherits Window {
+    background: transparent;
+    preferred-width: 220px;
+    preferred-height: 150px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <bool> loaded;
+    in property <string> city;
+    in property <string> temp;
+    in property <string> condition;
+    in property <string> range;
+    /// 0 солнце, 1 солнце за облаком, 2 облако, 3 туман, 4 дождь, 5 снег, 6 гроза.
+    in property <int> sky;
+    in property <string> note: "Загружаю…";
+
+    Text {
+        x: 22px;
+        y: 18px;
+        width: parent.width - 44px;
+        height: 20px;
+        text: root.loaded ? root.city : "Погода";
+        color: Palette.caret;
+        font-size: 13px;
+        font-weight: 600;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+
+    if root.loaded: Text {
+        x: 20px;
+        y: 38px;
+        width: 120px;
+        height: 70px;
+        text: root.temp;
+        color: Palette.text;
+        font-size: 56px;
+        font-weight: 300;
+        vertical-alignment: center;
+    }
+
+    if root.loaded: Glyph {
+        size: 44px;
+        tint: Palette.text;
+        commands: root.sky == 0 ? Icons.sun : root.sky == 1 ? Icons.cloud-sun : root.sky == 3 ? Icons.cloud-fog : root.sky == 4 ? Icons.cloud-rain : root.sky == 5 ? Icons.cloud-snow : root.sky == 6 ? Icons.cloud-lightning : Icons.cloud;
+        x: parent.width - self.width - 22px;
+        y: 52px;
+    }
+
+    if root.loaded: Text {
+        x: 22px;
+        y: 108px;
+        width: parent.width - 44px;
+        height: 18px;
+        text: root.condition;
+        color: Palette.text;
+        font-size: 13px;
+        font-weight: 600;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+
+    if root.loaded: Text {
+        x: 22px;
+        y: 126px;
+        width: parent.width - 44px;
+        height: 16px;
+        text: root.range;
+        color: Palette.secondary;
+        font-size: 11px;
+        vertical-alignment: center;
+    }
+
+    if !root.loaded: Text {
+        x: 22px;
+        y: 0px;
+        width: parent.width - 44px;
+        height: parent.height;
+        text: root.note;
+        color: Palette.secondary;
+        font-size: 13px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component NowPlayingWidget inherits Window {
+    background: transparent;
+    preferred-width: 220px;
+    preferred-height: 150px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <string> track: "Ничего не играет";
+    in property <string> artist;
+    in property <bool> active;
+    in property <bool> playing;
+    callback previous();
+    callback play-pause();
+    callback next();
+
+    Rectangle {
+        x: 20px;
+        y: 18px;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: root.active ? Palette.accent : #ffffff26;
+
+        Glyph {
+            size: 22px;
+            tint: white;
+            commands: Icons.music-notes;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+
+    Text {
+        x: 74px;
+        y: 18px;
+        width: parent.width - 74px - 18px;
+        height: 24px;
+        text: root.track;
+        color: root.active ? Palette.text : Palette.secondary;
+        font-size: 14px;
+        font-weight: 600;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: 74px;
+        y: 42px;
+        width: parent.width - 74px - 18px;
+        height: 20px;
+        text: root.artist;
+        color: Palette.secondary;
+        font-size: 12px;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+
+    RoundTap {
+        x: parent.width / 2 - 64px;
+        y: 84px;
+        size: 44px;
+        icon: Icons.skip-back;
+        enabled: root.active;
+        clicked => {
+            root.previous();
+        }
+    }
+
+    RoundTap {
+        x: parent.width / 2 - 26px;
+        y: 80px;
+        size: 52px;
+        icon: root.playing ? Icons.pause : Icons.play;
+        enabled: root.active;
+        clicked => {
+            root.play-pause();
+        }
+    }
+
+    RoundTap {
+        x: parent.width / 2 + 20px;
+        y: 84px;
+        size: 44px;
+        icon: Icons.skip-forward;
+        enabled: root.active;
+        clicked => {
+            root.next();
+        }
+    }
+}
+
+export component StorageWidget inherits Window {
+    background: transparent;
+    preferred-width: 220px;
+    preferred-height: 150px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <[DriveInfo]> drives;
+
+    Text {
+        x: 22px;
+        y: 14px;
+        width: parent.width - 44px;
+        height: 20px;
+        text: "Диски";
+        color: Palette.caret;
+        font-size: 13px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+
+    for d[i] in root.drives: Rectangle {
+        x: 20px;
+        y: 40px + 36px * i;
+        width: parent.width - 40px;
+        height: 32px;
+
+        Text {
+            x: 0px;
+            y: 0px;
+            width: 36px;
+            height: 18px;
+            text: d.name;
+            color: Palette.text;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+
+        Text {
+            x: 36px;
+            y: 0px;
+            width: parent.width - 36px;
+            height: 18px;
+            text: d.caption;
+            color: Palette.secondary;
+            font-size: 11px;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            y: 22px;
+            width: parent.width;
+            height: 6px;
+            border-radius: 3px;
+            background: #ffffff26;
+
+            Rectangle {
+                x: 0px;
+                width: max(6px, parent.width * clamp(d.value, 0, 1));
+                height: parent.height;
+                border-radius: 3px;
+                background: d.value > 0.9 ? #e2574c : @linear-gradient(90deg, Palette.accent-top, Palette.caret);
+            }
+        }
+    }
+}
+
+export component CurrencyWidget inherits Window {
+    background: transparent;
+    preferred-width: 220px;
+    preferred-height: 150px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <[RateRow]> rows;
+    in property <string> caption: "Курс ЦБ";
+
+    Text {
+        x: 22px;
+        y: 14px;
+        width: parent.width - 44px;
+        height: 20px;
+        text: root.caption;
+        color: Palette.caret;
+        font-size: 13px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+
+    for r[i] in root.rows: Rectangle {
+        x: 20px;
+        y: 40px + 34px * i;
+        width: parent.width - 40px;
+        height: 34px;
+
+        Text {
+            width: 60px;
+            height: parent.height;
+            text: r.code;
+            color: Palette.secondary;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+
+        Text {
+            x: 60px;
+            width: parent.width - 60px;
+            height: parent.height;
+            text: r.value;
+            color: Palette.text;
+            font-size: 24px;
+            font-weight: 300;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component NotesWidget inherits Window {
+    background: transparent;
+    preferred-width: 220px;
+    preferred-height: 150px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <string> note;
+    in property <bool> editing;
+
+    Text {
+        x: 22px;
+        y: 14px;
+        width: parent.width - 44px;
+        height: 20px;
+        text: root.editing ? "Заметки · пишите" : "Заметки";
+        color: Palette.caret;
+        font-size: 13px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: 22px;
+        y: 40px;
+        width: parent.width - 44px;
+        height: parent.height - 52px;
+        text: root.note == "" && !root.editing ? "Нажмите, чтобы написать" : root.note + (root.editing ? "▏" : "");
+        color: root.note == "" && !root.editing ? Palette.secondary : Palette.text;
+        font-size: 14px;
+        wrap: word-wrap;
+        overflow: elide;
+        vertical-alignment: top;
+    }
+}

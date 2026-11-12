@@ -1,0 +1,49 @@
+import { Palette } from "common.slint";
+
+export component CaptionBackground inherits Window {
+    in property <string> caption-text;
+    in property <color> surface: #f6f6f6;
+    in property <color> ink: Palette.text;
+    background: root.surface;
+    default-font-family: "Segoe UI Variable Display";
+    Text {
+        x: 84px; width: max(0px, parent.width - 168px);
+        height: parent.height;
+        text: root.caption-text; color: root.ink;
+        font-size: 12px; horizontal-alignment: center; vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+component Light inherits Rectangle {
+    in property <color> tint;
+    in property <string> symbol;
+    in property <bool> reveal;
+    out property <bool> hovered: area.has-hover;
+    callback activated();
+    background: transparent;
+    area := TouchArea { clicked => { root.activated(); } }
+    Rectangle {
+        width: area.pressed ? 12px : 14px; height: self.width;
+        x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+        border-radius: self.width/2; background: root.tint;
+        animate width { duration: Palette.animations-enabled ? 100ms : 0ms; easing: ease-out; }
+    }
+    Text {
+        width: parent.width; height: parent.height;
+        text: root.symbol; color: #60251d; font-size: 11px; font-weight: 600;
+        horizontal-alignment: center; vertical-alignment: center;
+        opacity: root.reveal ? 1 : 0;
+        animate opacity { duration: Palette.animations-enabled ? 100ms : 0ms; }
+    }
+}
+
+export component CaptionLights inherits Window {
+    background: transparent;
+    default-font-family: "Segoe UI Variable Display";
+    callback activated(int);
+    property <bool> reveal: close.hovered || minimize.hovered || zoom.hovered;
+    close := Light { x: 0px; width: 26px; height: parent.height; tint: #ff5f57; symbol: "×"; reveal: root.reveal; activated => { root.activated(0); } }
+    minimize := Light { x: 26px; width: 26px; height: parent.height; tint: #febc2e; symbol: "−"; reveal: root.reveal; activated => { root.activated(1); } }
+    zoom := Light { x: 52px; width: 26px; height: parent.height; tint: #28c840; symbol: "↗"; reveal: root.reveal; activated => { root.activated(2); } }
+}

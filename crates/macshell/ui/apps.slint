@@ -1,0 +1,221 @@
+// Окно «Приложения»: заголовок, фильтры и сетка значков. Размер 820 x 600; сетка 6 колонок по 126 x 118.
+// Прокруткой владеет Rust (колесо мыши): `scroll-to` плавно догоняется внутри.
+import { Palette, AppPlaceholder, Icons, Glyph } from "common.slint";
+
+export struct AppTile {
+    name: string,
+    icon: image,
+    has-icon: bool,
+}
+
+component Tile inherits Rectangle {
+    in property <AppTile> tile;
+    /// Выбрана с клавиатуры.
+    in property <bool> selected;
+    callback activated();
+    callback remove-requested();
+    width: 126px;
+    height: 118px;
+
+    // Плитка с отступом 5 и радиусом 18: внутри значок 64 и подпись.
+    Rectangle {
+        x: 5px;
+        y: 3px;
+        width: parent.width - 10px;
+        height: parent.height - 6px;
+        border-radius: 18px;
+        background: area.pressed ? #ffffff2e : (root.selected || area.has-hover) ? #ffffff26 : #ffffff00;
+        animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+    }
+
+    if root.tile.has-icon: Image {
+        source: root.tile.icon;
+        width: area.pressed ? 61px : 64px;
+        height: self.width;
+        animate width { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+        x: (parent.width - self.width) / 2;
+        y: 46px - self.height / 2;
+        image-fit: contain;
+    }
+
+    if !root.tile.has-icon: AppPlaceholder {
+        size: area.pressed ? 53px : 56px;
+        animate size { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+        x: (parent.width - self.width) / 2;
+        y: 46px - self.height / 2;
+    }
+
+    Text {
+        x: 10px;
+        y: 84px;
+        width: parent.width - 20px;
+        height: 24px;
+        text: root.tile.name;
+        overflow: elide;
+        color: Palette.text;
+        font-size: 12px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    area := TouchArea {
+        clicked => {
+            root.activated();
+        }
+    }
+
+    // Убрать из списка: крестик в углу плитки, виден под курсором (для приложений, которых уже нет).
+    Rectangle {
+        width: 22px;
+        height: 22px;
+        x: parent.width - self.width - 8px;
+        y: 8px;
+        border-radius: 11px;
+        background: remove-area.pressed ? #ffffff50 : remove-area.has-hover ? #ffffff38 : #00000066;
+        opacity: (area.has-hover || remove-area.has-hover) ? 1 : 0;
+        animate opacity { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+
+        Glyph {
+            commands: Icons.close;
+            size: 12px;
+            tint: Palette.text;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+
+        remove-area := TouchArea {
+            clicked => {
+                root.remove-requested();
+            }
+        }
+    }
+}
+
+export component Apps inherits Window {
+    background: transparent;
+    preferred-width: 820px;
+    preferred-height: 600px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <string> heading: "Приложения";
+    in property <[string]> chips;
+    in property <int> chip: 0;
+    in property <[AppTile]> tiles;
+    /// Куда прокручена сетка (сверху вниз, положительное число).
+    in property <length> scroll-to: 0px;
+    in property <string> empty-text: "Здесь пока ничего нет";
+    /// Набранный запрос; пустой показывает подсказку «Поиск».
+    in property <string> query;
+    /// Плитка, выбранная с клавиатуры; -1 нет.
+    in property <int> selected: -1;
+    callback chip-selected(int);
+    callback activated(int);
+    callback remove-requested(int);
+
+    property <length> scroll: root.scroll-to;
+    animate scroll { duration: Palette.animations-enabled ? 130ms : 0ms; easing: ease-out; }
+
+    Text {
+        x: 36px;
+        y: 22px;
+        height: 40px;
+        text: root.heading;
+        color: Palette.text;
+        font-size: 22px;
+        font-weight: 700;
+        vertical-alignment: center;
+    }
+
+    HorizontalLayout {
+        x: 32px;
+        y: 70px;
+        height: 32px;
+        width: parent.width - 64px;
+        alignment: start;
+        spacing: 6px;
+
+        for name[i] in root.chips: Rectangle {
+            width: label.preferred-width + 28px;
+            border-radius: 16px;
+            background: i == root.chip ? #ffffff38 : chip-area.pressed ? #ffffff26 : chip-area.has-hover ? #ffffff17 : #ffffff00;
+            animate background { duration: Palette.animations-enabled ? 110ms : 0ms; easing: ease-out; }
+
+            label := Text {
+                x: 14px;
+                height: parent.height;
+                text: name;
+                color: Palette.text;
+                font-size: 13px;
+                font-weight: i == root.chip ? 600 : 400;
+                vertical-alignment: center;
+            }
+
+            chip-area := TouchArea {
+                clicked => {
+                    root.chip-selected(i);
+                }
+            }
+        }
+    }
+
+    // Поиск справа в строке фильтров: печатаешь сразу, без щелчка.
+    Rectangle {
+        x: parent.width - 32px - 220px;
+        y: 70px;
+        width: 220px;
+        height: 32px;
+        border-radius: 16px;
+        background: #ffffff1c;
+
+        Glyph {
+            commands: Icons.magnifier;
+            size: 14px;
+            tint: Palette.secondary;
+            x: 12px;
+            y: (parent.height - self.height) / 2;
+        }
+
+        Text {
+            x: 34px;
+            width: parent.width - 34px - 12px;
+            height: parent.height;
+            text: root.query == "" ? "Поиск" : root.query;
+            color: root.query == "" ? Palette.secondary : Palette.text;
+            font-size: 13px;
+            overflow: elide;
+            vertical-alignment: center;
+        }
+    }
+
+    // Сетка: обрезается по своему прямоугольнику, плитки сдвигаются на `scroll`.
+    Rectangle {
+        x: 32px;
+        y: 118px;
+        width: parent.width - 64px;
+        height: parent.height - 118px - 22px;
+        clip: true;
+
+        for tile[i] in root.tiles: Tile {
+            x: Math.mod(i, 6) * 126px;
+            y: Math.floor(i / 6) * 118px - root.scroll;
+            tile: tile;
+            selected: i == root.selected;
+            activated => {
+                root.activated(i);
+            }
+            remove-requested => {
+                root.remove-requested(i);
+            }
+        }
+
+        if root.tiles.length == 0: Text {
+            width: parent.width;
+            height: 80px;
+            text: root.empty-text;
+            color: Palette.secondary;
+            font-size: 14px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}

@@ -1,0 +1,176 @@
+// Dock: ряд значков приложений на стеклянной подложке. Окно во всю ширину экрана и 72 px высотой, подложка по
+// центру (прозрачные края пропускают мышь). Слот 60 px, разделитель 14 px, поля 10 px (как в `dock.rs`).
+import { Palette, AppPlaceholder, Glyph, Icons } from "common.slint";
+
+/// kind: 0 приложение, 1 кнопка «Приложения», 2 разделитель.
+export struct DockSlot {
+    icon: image,
+    has-icon: bool,
+    running: bool,
+    kind: int,
+    name: string,
+}
+
+component Slot inherits Rectangle {
+    in property <DockSlot> slot;
+    in property <int> distance: 99;
+    in property <float> fit: 1;
+    callback clicked();
+    callback right-clicked(length);
+    callback hovered();
+    width: (root.slot.kind == 2 ? 14px : 60px) * root.fit;
+
+    if root.slot.kind == 2: Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: 72px - 56px * root.fit;
+        width: 1px;
+        height: 40px * root.fit;
+        background: #ffffff38;
+    }
+
+    if root.slot.kind != 2: Rectangle {
+        // Значок 48 px; под курсором растёт до 58 px, нижний край на месте.
+        property <length> size: (root.distance == 0 ? 58px : root.distance == 1 ? 53px : 48px) * root.fit * (area.pressed ? 0.96 : 1);
+        animate size { duration: Palette.animations-enabled ? 120ms : 0ms; easing: ease-out; }
+        width: self.size;
+        height: self.size;
+        x: (parent.width - self.width) / 2;
+        y: 72px - 16px * root.fit - self.height;
+
+        if root.slot.kind == 0 && root.slot.has-icon: Image {
+            source: root.slot.icon;
+            width: parent.width;
+            height: parent.height;
+            image-fit: contain;
+        }
+
+        if root.slot.kind == 0 && !root.slot.has-icon: AppPlaceholder {
+            size: parent.width * 0.85;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+
+        if root.slot.kind == 3 || root.slot.kind == 4: Rectangle {
+            width: parent.width;
+            height: parent.height;
+            border-radius: parent.width * 0.23;
+            background: #777d88e8;
+            Glyph {
+                commands: root.slot.kind == 3 ? Icons.folder : Icons.trash;
+                size: parent.width * 0.56;
+                tint: white;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        // «Приложения»: синяя плитка с сеткой из девяти точек.
+        if root.slot.kind == 1: Rectangle {
+            width: parent.width;
+            height: parent.height;
+            border-radius: parent.width * 0.23;
+            background: Palette.accent;
+            border-width: 1px;
+            border-color: #ffffff40;
+
+            for n in 9: Rectangle {
+                width: parent.width * 0.14;
+                height: self.width;
+                border-radius: self.width / 2;
+                background: #ffffffee;
+                x: parent.width * (0.22 + Math.mod(n, 3) * 0.2);
+                y: parent.height * (0.22 + Math.floor(n / 3) * 0.2);
+            }
+        }
+    }
+
+    if root.slot.kind != 2 && root.slot.name != "": Rectangle {
+        opacity: root.distance == 0 ? 1 : 0;
+        animate opacity { duration: Palette.animations-enabled ? 100ms : 0ms; easing: ease-out; }
+        x: (parent.width - self.width) / 2;
+        y: -28px;
+        width: min(240px, dock-label.preferred-width + 20px);
+        height: 25px;
+        border-radius: 9px;
+        background: #252830ed;
+        border-width: 1px;
+        border-color: #ffffff45;
+        dock-label := Text {
+            x: 10px;
+            width: parent.width - 20px;
+            height: parent.height;
+            text: root.slot.name;
+            overflow: elide;
+            font-size: 12px;
+            color: white;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+
+    // Точка «запущено».
+    if root.slot.kind == 0 && root.slot.running: Rectangle {
+        width: 5px * root.fit;
+        height: 5px * root.fit;
+        border-radius: self.width / 2;
+        x: (parent.width - self.width) / 2;
+        y: 72px - 9px * root.fit;
+        background: #ffffffd9;
+    }
+
+    area := TouchArea {
+        enabled: root.slot.kind != 2;
+        clicked => {
+            root.clicked();
+        }
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.move {
+                root.hovered();
+            }
+            if e.button == PointerEventButton.right && e.kind == PointerEventKind.up {
+                root.right-clicked(self.absolute-position.x + self.width / 2);
+            }
+        }
+    }
+}
+
+export component DockView inherits Window {
+    background: transparent;
+    preferred-width: 1920px;
+    preferred-height: 102px;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <[DockSlot]> slots;
+    in property <float> fit: 1;
+    in-out property <int> hover-index: -1;
+    /// Ширина видимой подложки: по ней Rust рисует стекло.
+    out property <length> pill-width: lay.preferred-width;
+    /// Левый край подложки.
+    out property <length> pill-x: (root.width - lay.preferred-width) / 2;
+    callback clicked(int);
+    callback right-clicked(int, length);
+
+    lay := HorizontalLayout {
+        x: (root.width - self.preferred-width) / 2;
+        y: 30px;
+        height: 72px;
+        padding-left: 10px * root.fit;
+        padding-right: 10px * root.fit;
+        alignment: start;
+
+        for slot[i] in root.slots: Slot {
+            slot: slot;
+            fit: root.fit;
+            distance: root.hover-index < 0 ? 99 : Math.abs(i - root.hover-index);
+            hovered => {
+                root.hover-index = i;
+            }
+            clicked => {
+                root.clicked(i);
+            }
+            right-clicked(x) => {
+                root.right-clicked(i, x);
+            }
+        }
+    }
+}

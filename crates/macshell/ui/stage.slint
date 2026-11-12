@@ -1,0 +1,61 @@
+// Полоска Stage Manager у левого края: недавние приложения, которые не на сцене, миниатюрами друг под другом.
+// Окно прозрачное, плитки рисуются на нём; щелчок по плитке выводит приложение на сцену.
+import { Palette, AppPlaceholder } from "common.slint";
+
+export struct StageTile {
+    image: image,
+    has-image: bool,
+    icon: image,
+    has-icon: bool,
+    title: string,
+}
+
+export component StageStrip inherits Window {
+    background: transparent;
+    default-font-family: "Segoe UI Variable Display";
+
+    in property <[StageTile]> tiles;
+    callback picked(int);
+
+    for t[i] in root.tiles: Rectangle {
+        x: 6px;
+        y: 6px + 98px * i;
+        width: 124px;
+        height: 90px;
+        border-radius: 14px;
+        background: #14161cd0;
+        border-width: tile-area.has-hover ? 2px : 1px;
+        border-color: tile-area.has-hover ? Palette.accent : #ffffff30;
+        clip: true;
+
+        if t.has-image: Image {
+            source: t.image;
+            x: 6px;
+            y: 6px;
+            width: parent.width - 12px;
+            height: parent.height - 12px;
+            image-fit: contain;
+        }
+
+        if !t.has-image: AppPlaceholder {
+            size: 36px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+
+        if t.has-icon: Image {
+            source: t.icon;
+            x: parent.width - 28px;
+            y: parent.height - 28px;
+            width: 22px;
+            height: 22px;
+            image-fit: contain;
+        }
+
+        tile-area := TouchArea {
+            clicked => {
+                root.picked(i);
+            }
+        }
+    }
+}
