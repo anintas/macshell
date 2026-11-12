@@ -1,33 +1,48 @@
-# macshell
+<div align="center">
+  <img src="assets/macshell-avatar-v2.png" alt="macshell" width="148">
 
-<img src="assets/macshell-avatar.png" alt="macshell avatar" width="160">
+  # macshell
 
-An experimental Windows desktop shell inspired by macOS, built primarily in Rust.
+  **A little macOS inspiration for your Windows desktop.**
 
-macshell brings together a top menu bar, a Dock and application search with system controls and desktop widgets. It is a personal exploration of desktop interfaces, Windows APIs and graphics programming.
+  An experimental desktop shell built primarily in Rust.
 
-> **Preview software:** window management and animations are experimental. This project is independent and is not affiliated with Apple.
+  [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square&logo=windows)](https://github.com/anintas/macshell/releases)
+  [![Rust](https://img.shields.io/badge/Built%20with-Rust-dea584?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+  [![Status](https://img.shields.io/badge/Status-Preview-e6a165?style=flat-square)](https://github.com/anintas/macshell/releases)
 
-## Try the preview
+  [**Download for Windows**](https://github.com/anintas/macshell/releases/download/v0.1.0-preview/macshell-setup-0.1.0-preview.exe) · [All releases](https://github.com/anintas/macshell/releases) · [Build from source](#build-from-source)
+</div>
 
-1. Download `macshell-windows-x64.zip` from [Releases](https://github.com/anintas/macshell/releases).
-2. Extract the archive and run `macshell.exe`.
-3. To exit, run `macshell.exe --quit` from a terminal in the same folder.
+---
 
-If the Windows taskbar remains hidden after an unexpected exit, run `macshell.exe --restore-taskbar`.
+macshell explores a different way to use the Windows desktop. It brings a top bar, Dock, search and system controls into one shell inspired by macOS.
 
-## Features
+> **Early preview.** Features and window animations are experimental. macshell is an independent project and is not affiliated with Apple.
 
-- A top bar with system status and controls
-- A Dock and application launcher
-- Search, desktop widgets and window-management experiments
-- Glass rendering using Windows graphics APIs
+## What is inside
 
-Some features are experimental and may vary between Windows configurations.
+- **Top bar** — system status and quick controls, always within reach.
+- **Dock** — launch and switch between applications.
+- **Search** — find apps and actions from one place.
+- **Desktop utilities** — widgets and experiments with window management.
+- **Glass rendering** — custom visual effects using Windows graphics APIs.
+
+Availability and behavior may vary across Windows configurations.
+
+## Installation
+
+1. Download [macshell setup](https://github.com/anintas/macshell/releases/download/v0.1.0-preview/macshell-setup-0.1.0-preview.exe) for 64-bit Windows.
+2. Open the installer and follow the steps. It installs for your Windows account without administrator access.
+3. Start **macshell** from the Start menu. A desktop shortcut is optional.
+
+The preview installer is not digitally signed, so Windows may show a SmartScreen warning. To uninstall, use **Settings → Apps → Installed apps → macshell**.
+
+To exit a running copy from a terminal, run `macshell.exe --quit`. If Windows taskbar stays hidden after an unexpected exit, run `macshell.exe --restore-taskbar` from the installation directory.
 
 ## Build from source
 
-You need Windows, Rust with the MSVC target, and the Visual Studio C++ build tools.
+Requirements: Windows x64, a Rust MSVC toolchain, and Visual Studio C++ build tools.
 
 ```powershell
 git clone https://github.com/anintas/macshell.git
@@ -35,18 +50,23 @@ cd macshell
 cargo build --release -p macshell
 ```
 
-The executable is written to `target/release/macshell.exe`. Close a running copy before rebuilding, as Windows can lock the executable.
+The executable is `target/release/macshell.exe`. Close a running copy before rebuilding: Windows can lock the executable.
 
-## Project structure
+To build the installer, install Inno Setup 6 and run:
 
-- `crates/macshell` — shell, Windows integration and Slint interface
-- `crates/glass` — glass rendering and GPU shader
-- `crates/capture` — screen capture
-- `crates/macshell/windhawk` — optional experimental animation integration, with upstream attribution in its source
+```powershell
+iscc installer\macshell.iss
+```
 
-Rust handles the application logic. Slint describes the interface; HLSL implements the GPU shader. The optional Windhawk integration is C++.
+The setup executable appears under `installer/output/`.
 
-## Status
+## Under the hood
 
-This is a work in progress, not a replacement for the Windows shell. Installation and clean-machine testing are still being developed. No project-wide license has yet been specified; individual third-party components retain their own notices.
+| Component | Role |
+| --- | --- |
+| `crates/macshell` | Windows integration, shell logic and Slint UI |
+| `crates/glass` | Glass rendering and HLSL shader |
+| `crates/capture` | Screen capture |
+| `crates/macshell/windhawk` | Optional experimental C++ animation integration; upstream attribution is retained in the source |
 
+The application is primarily Rust; the UI uses Slint and the GPU shader uses HLSL. No project-wide license has been specified. Individual third-party components retain their own notices.
